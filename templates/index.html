@@ -1,0 +1,315 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Email Design Checker</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+  <style>
+    .upload-zone { transition: border-color 0.2s, background-color 0.2s; }
+    .upload-zone.active { border-color: #3b82f6; background-color: #eff6ff; }
+    .prose h2 { font-size: 1.1rem; font-weight: 700; margin-top: 1.25rem; margin-bottom: 0.5rem; color: #111827; }
+    .prose h3 { font-size: 0.95rem; font-weight: 600; margin-top: 1rem; margin-bottom: 0.35rem; color: #1f2937; }
+    .prose ul { list-style: disc; padding-left: 1.25rem; margin: 0.5rem 0; }
+    .prose li { margin: 0.25rem 0; color: #374151; font-size: 0.9rem; }
+    .prose p { margin: 0.5rem 0; color: #374151; font-size: 0.9rem; }
+    .prose strong { color: #111827; }
+    .prose code { background: #f3f4f6; padding: 0.1rem 0.35rem; border-radius: 4px; font-size: 0.85rem; }
+    .prose pre { background: #f3f4f6; padding: 1rem; border-radius: 8px; overflow-x: auto; }
+    .spinner { animation: spin 1s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .audit-table th { background:#f9fafb; font-size:0.75rem; font-weight:600; color:#6b7280; text-transform:uppercase; letter-spacing:.05em; padding:0.5rem 0.75rem; text-align:left; border-bottom:1px solid #e5e7eb; }
+    .audit-table td { font-size:0.8rem; color:#374151; padding:0.5rem 0.75rem; border-bottom:1px solid #f3f4f6; vertical-align:top; word-break:break-all; }
+    .audit-table tr:last-child td { border-bottom:none; }
+    .audit-table tr:hover td { background:#f9fafb; }
+    .badge-ok    { display:inline-block; background:#d1fae5; color:#065f46; border-radius:9999px; padding:1px 8px; font-size:0.7rem; font-weight:600; white-space:nowrap; }
+    .badge-warn  { display:inline-block; background:#fef3c7; color:#92400e; border-radius:9999px; padding:1px 8px; font-size:0.7rem; font-weight:600; white-space:nowrap; }
+    .badge-error { display:inline-block; background:#fee2e2; color:#991b1b; border-radius:9999px; padding:1px 8px; font-size:0.7rem; font-weight:600; white-space:nowrap; }
+  </style>
+</head>
+<body class="bg-gray-50 min-h-screen">
+
+  <div class="max-w-3xl mx-auto py-12 px-4">
+
+    <!-- Header -->
+    <div class="mb-8">
+      <h1 class="text-3xl font-bold text-gray-900">Email Design Checker</h1>
+      <p class="mt-1 text-gray-500">Upload your HTML email and design mockup — local AI will tell you if they match.</p>
+    </div>
+
+    <!-- Upload Form -->
+    <form id="compareForm" class="space-y-6">
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
+
+        <!-- HTML Upload -->
+        <div>
+          <label class="block text-sm font-semibold text-gray-700 mb-2">HTML Email File</label>
+          <div id="htmlZone"
+               class="upload-zone border-2 border-dashed border-gray-300 rounded-xl p-8 text-center cursor-pointer hover:border-blue-400">
+            <input type="file" id="htmlFile" name="html" accept=".html,.htm" class="hidden" />
+            <svg class="mx-auto h-10 w-10 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"
+                    d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414A1 1 0 0119 9.414V19a2 2 0 01-2 2z" />
+            </svg>
+            <p class="mt-2 text-sm text-gray-500">Drop .html file or <span class="text-blue-500 font-medium">browse</span></p>
+            <p id="htmlName" class="mt-1 text-xs font-medium text-blue-600 truncate"></p>
+          </div>
+        </div>
+
+        <!-- Design Image Upload -->
+        <div>
+          <label class="block text-sm font-semibold text-gray-700 mb-2">Design Mockup Image</label>
+          <div id="designZone"
+               class="upload-zone border-2 border-dashed border-gray-300 rounded-xl p-8 text-center cursor-pointer hover:border-blue-400">
+            <input type="file" id="designFile" name="design" accept="image/*" class="hidden" />
+            <svg class="mx-auto h-10 w-10 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"
+                    d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+            </svg>
+            <p class="mt-2 text-sm text-gray-500">Drop image or <span class="text-blue-500 font-medium">browse</span></p>
+            <p id="designName" class="mt-1 text-xs font-medium text-blue-600 truncate"></p>
+          </div>
+          <img id="designPreview" alt="Design preview"
+               class="hidden mt-2 rounded-lg border border-gray-200 max-h-36 mx-auto object-contain" />
+        </div>
+      </div>
+
+      <button type="submit" id="compareBtn"
+              class="w-full py-3 px-6 bg-blue-600 text-white rounded-xl font-semibold text-sm
+                     hover:bg-blue-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors">
+        Compare Against Design
+      </button>
+    </form>
+
+    <!-- Loading -->
+    <div id="loading" class="hidden mt-8 flex items-center justify-center gap-3 text-gray-600">
+      <svg class="spinner h-5 w-5 text-blue-500" viewBox="0 0 24 24" fill="none">
+        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+      </svg>
+      <span class="text-sm">Analyzing — this may take 20–40 seconds...</span>
+    </div>
+
+    <!-- Results -->
+    <div id="results" class="hidden mt-8">
+      <div class="flex items-center gap-3 mb-4">
+        <h2 class="text-lg font-bold text-gray-900">Analysis Results</h2>
+        <span id="renderedBadge"
+              class="hidden text-xs bg-green-100 text-green-700 border border-green-200 px-2 py-0.5 rounded-full font-medium">
+          HTML Rendered
+        </span>
+        <span id="codeBadge"
+              class="hidden text-xs bg-yellow-100 text-yellow-700 border border-yellow-200 px-2 py-0.5 rounded-full font-medium">
+          Code Analysis (install Playwright for visual render)
+        </span>
+      </div>
+      <div id="analysisContent" class="prose bg-white rounded-xl border border-gray-200 p-6 shadow-sm"></div>
+
+      <!-- ── Links Audit ─────────────────────────────────── -->
+      <div id="linksSection" class="hidden mt-6">
+        <div class="flex items-center gap-2 mb-3">
+          <h3 class="text-base font-bold text-gray-900">🔗 Links Audit</h3>
+          <span id="linksSummary" class="text-xs text-gray-500"></span>
+        </div>
+        <div class="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+          <table class="audit-table w-full">
+            <thead>
+              <tr>
+                <th style="width:2rem">#</th>
+                <th style="width:40%">URL</th>
+                <th>Link Text</th>
+                <th style="width:7rem">Status</th>
+              </tr>
+            </thead>
+            <tbody id="linksBody"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- ── Images & Alt Text Audit ─────────────────────── -->
+      <div id="imagesSection" class="hidden mt-6">
+        <div class="flex items-center gap-2 mb-3">
+          <h3 class="text-base font-bold text-gray-900">🖼 Images &amp; Alt Text</h3>
+          <span id="imagesSummary" class="text-xs text-gray-500"></span>
+        </div>
+        <div class="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+          <table class="audit-table w-full">
+            <thead>
+              <tr>
+                <th style="width:2rem">#</th>
+                <th style="width:45%">Image URL</th>
+                <th>Alt Text</th>
+                <th style="width:7rem">Status</th>
+              </tr>
+            </thead>
+            <tbody id="imagesBody"></tbody>
+          </table>
+        </div>
+      </div>
+
+    </div>
+
+  </div>
+
+  <script>
+    // ── Utility ──────────────────────────────────────────────────────
+    function escHtml(str) {
+      return String(str ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+    }
+
+    // ── File upload helpers ──────────────────────────────────────────
+    function setupZone(zoneId, inputId, nameId, onFile) {
+      const zone  = document.getElementById(zoneId);
+      const input = document.getElementById(inputId);
+      const name  = document.getElementById(nameId);
+
+      zone.addEventListener('click', () => input.click());
+
+      input.addEventListener('change', () => {
+        const file = input.files[0];
+        if (file) { name.textContent = file.name; zone.classList.add('active'); onFile && onFile(file); }
+      });
+
+      zone.addEventListener('dragover', e => { e.preventDefault(); zone.classList.add('active'); });
+      zone.addEventListener('dragleave', () => zone.classList.remove('active'));
+      zone.addEventListener('drop', e => {
+        e.preventDefault();
+        const file = e.dataTransfer.files[0];
+        if (file) {
+          const dt = new DataTransfer();
+          dt.items.add(file);
+          input.files = dt.files;
+          name.textContent = file.name;
+          zone.classList.add('active');
+          onFile && onFile(file);
+        }
+      });
+    }
+
+    setupZone('htmlZone', 'htmlFile', 'htmlName');
+
+    setupZone('designZone', 'designFile', 'designName', file => {
+      const preview = document.getElementById('designPreview');
+      const reader  = new FileReader();
+      reader.onload = e => { preview.src = e.target.result; preview.classList.remove('hidden'); };
+      reader.readAsDataURL(file);
+    });
+
+    // ── Form submission ──────────────────────────────────────────────
+    document.getElementById('compareForm').addEventListener('submit', async e => {
+      e.preventDefault();
+
+      const htmlFile   = document.getElementById('htmlFile').files[0];
+      const designFile = document.getElementById('designFile').files[0];
+
+      if (!htmlFile || !designFile) {
+        alert('Please upload both an HTML file and a design image.');
+        return;
+      }
+
+      const btn      = document.getElementById('compareBtn');
+      const loading  = document.getElementById('loading');
+      const results  = document.getElementById('results');
+
+      btn.disabled = true;
+      loading.classList.remove('hidden');
+      results.classList.add('hidden');
+      document.getElementById('linksSection').classList.add('hidden');
+      document.getElementById('imagesSection').classList.add('hidden');
+
+      try {
+        const formData = new FormData();
+        formData.append('html',   htmlFile);
+        formData.append('design', designFile);
+
+        const res = await fetch('/compare', { method: 'POST', body: formData });
+
+        if (!res.ok) {
+          const err = await res.json();
+          throw new Error(err.error || `Server error ${res.status}`);
+        }
+
+        const data = await res.json();
+
+        document.getElementById('analysisContent').innerHTML = marked.parse(data.analysis);
+        document.getElementById('renderedBadge').classList.toggle('hidden', !data.rendered);
+        document.getElementById('codeBadge').classList.toggle('hidden', data.rendered);
+
+        // ── Populate Links Audit ──────────────────────────────────────
+        const audit = data.audit || {};
+
+        if (audit.links && audit.links.length) {
+          const dupeCount = audit.links.filter(l => l.duplicate).length;
+          document.getElementById('linksSummary').textContent =
+            `${audit.link_count} total · ${audit.unique_link_count} unique` +
+            (dupeCount ? ` · ${dupeCount} duplicate` : '');
+
+          const tbody = document.getElementById('linksBody');
+          tbody.innerHTML = '';
+          audit.links.forEach((lnk, i) => {
+            let badge, status;
+            if (lnk.empty) {
+              badge = 'badge-warn'; status = '⚠ Empty/# href';
+            } else if (lnk.duplicate) {
+              badge = 'badge-warn'; status = `🔄 Duplicate ×${lnk.occurrences}`;
+            } else {
+              badge = 'badge-ok'; status = '✓ OK';
+            }
+            const shortUrl = lnk.href.length > 60 ? lnk.href.slice(0, 57) + '…' : lnk.href;
+            tbody.insertAdjacentHTML('beforeend', `
+              <tr>
+                <td class="text-gray-400">${i + 1}</td>
+                <td><a href="${escHtml(lnk.href)}" target="_blank" rel="noopener"
+                       class="text-blue-600 hover:underline">${escHtml(shortUrl) || '—'}</a></td>
+                <td class="text-gray-600">${escHtml(lnk.text)}</td>
+                <td><span class="${badge}">${status}</span></td>
+              </tr>`);
+          });
+          document.getElementById('linksSection').classList.remove('hidden');
+        }
+
+        // ── Populate Images Audit ─────────────────────────────────────
+        if (audit.images && audit.images.length) {
+          const missingCount = audit.missing_alt_count;
+          document.getElementById('imagesSummary').textContent =
+            `${audit.image_count} images` +
+            (missingCount ? ` · ⚠ ${missingCount} missing alt` : ' · all alt text present');
+
+          const tbody = document.getElementById('imagesBody');
+          tbody.innerHTML = '';
+          audit.images.forEach((img, i) => {
+            let badge, status;
+            if (img.alt_missing) {
+              badge = 'badge-error'; status = '✗ No alt attr';
+            } else if (img.alt_empty) {
+              badge = 'badge-warn'; status = '⚠ Empty alt';
+            } else {
+              badge = 'badge-ok'; status = '✓ OK';
+            }
+            const shortSrc = img.src.length > 60 ? img.src.slice(0, 57) + '…' : img.src;
+            tbody.insertAdjacentHTML('beforeend', `
+              <tr>
+                <td class="text-gray-400">${i + 1}</td>
+                <td><a href="${escHtml(img.src)}" target="_blank" rel="noopener"
+                       class="text-blue-600 hover:underline">${escHtml(shortSrc) || '—'}</a></td>
+                <td class="text-gray-600 italic">${img.alt_missing ? '<span class="text-red-400">(attribute missing)</span>' : escHtml(img.alt) || '<span class="text-yellow-500">(empty)</span>'}</td>
+                <td><span class="${badge}">${status}</span></td>
+              </tr>`);
+          });
+          document.getElementById('imagesSection').classList.remove('hidden');
+        }
+
+        results.classList.remove('hidden');
+        results.scrollIntoView({ behavior: 'smooth', block: 'start' });
+
+      } catch (err) {
+        alert('Error: ' + err.message);
+      } finally {
+        btn.disabled = false;
+        loading.classList.add('hidden');
+      }
+    });
+  </script>
+</body>
+</html>
