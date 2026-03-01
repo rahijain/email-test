@@ -1,3 +1,4 @@
+import io
 import os
 import base64
 import traceback
@@ -5,6 +6,7 @@ from typing import Optional
 from html.parser import HTMLParser
 import ollama
 from flask import Flask, render_template, request, jsonify
+from PIL import Image
 
 app = Flask(__name__)
 app.config["MAX_CONTENT_LENGTH"] = 32 * 1024 * 1024  # 32MB max upload
@@ -119,6 +121,21 @@ def detect_media_type(content_type: str, filename: str) -> str:
     return "image/png"
 
 
+def combine_images_side_by_side(img1_bytes: bytes, img2_bytes: bytes) -> bytes:
+    """Combine two images side by side into a single image."""
+    img1 = Image.open(io.BytesIO(img1_bytes)).convert("RGB")
+    img2 = Image.open(io.BytesIO(img2_bytes)).convert("RGB")
+    if img1.height != img2.height:
+        ratio = img1.height / img2.height
+        img2 = img2.resize((int(img2.width * ratio), img1.height), Image.LANCZOS)
+    combined = Image.new("RGB", (img1.width + img2.width, img1.height))
+    combined.paste(img1, (0, 0))
+    combined.paste(img2, (img1.width, 0))
+    buf = io.BytesIO()
+    combined.save(buf, format="JPEG", quality=85)
+    return buf.getvalue()
+
+
 def render_html_to_screenshot(html_content: str) -> Optional[bytes]:
     """Render HTML to a screenshot using Playwright. Returns None if unavailable."""
     try:
@@ -169,16 +186,23 @@ def compare():
         rendered = screenshot is not None
 
         # Build images list and prompt for Ollama
-        images = [design_bytes]
+        # Combine into one image since most vision models support only one image
         prompt_lines = [
             "I need you to compare an email design mockup against its HTML implementation "
-            "and tell me whether they match.\n\n## Design Mockup:\n(First image provided)\n"
+            "and tell me whether they match.\n\n"
         ]
 
         if rendered:
-            images.append(screenshot)
-            prompt_lines.append("## Rendered HTML Email:\n(Second image provided)\n")
+            combined_image = combine_images_side_by_side(design_bytes, screenshot)
+            images = [combined_image]
+            prompt_lines.append(
+                "## Images provided (side by side):\n"
+                "- **Left**: Design Mockup\n"
+                "- **Right**: Rendered HTML Email\n"
+            )
         else:
+            images = [design_bytes]
+            prompt_lines.append("## Design Mockup:\n(Image provided)\n")
             excerpt = html_content[:15000] + ("...[truncated]" if len(html_content) > 15000 else "")
             prompt_lines.append(f"\n## HTML Code:\n```html\n{excerpt}\n```")
 
